@@ -16,7 +16,7 @@ clark outputs timestamps, separated by newlines.
 Timestamps are in milliseconds.
 
 clark requires a valid mpv installation.
-Options --trim and --slice require ffmpeg.
+Options --trim and --split require ffmpeg.
 
 See more details at:
 https://github.com/wong-justin/clark
@@ -34,17 +34,17 @@ Controls:
 
 Examples:
   clark file.mp4 --trim --start-paused
-  clark file.mp3 --slice --import 1200,9500
+  clark file.mp3 --split --import 1200,9500
   
 Usage: 
-  clark <filepath> [--trim | --slice]
+  clark <filepath> [--trim | --split]
                    [--import <timestamps>]
                    [--start-paused]
   clark (-h | --version)
 
 Options:
   --trim          Extract between two timestamps
-  --slice         Cut at each timestamp
+  --split         Cut at each timestamp
   --import        Load comma-separated timestamps
   --start-paused  Disable autoplay
   -h --help       Show this screen
