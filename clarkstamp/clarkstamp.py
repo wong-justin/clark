@@ -191,11 +191,16 @@ def run_app():
     model = Model(render=lambda m: view_model(m, term), state={
         'position_ms': 0,
         'duration_ms': 0,
-        'is_paused'  : True,
+        'is_paused'  : False,
         'timestamps' : [],
         'timestamp_index': None,
     })
     register_player_observers(model=model, player=player)
+    if start_paused:
+        player.pause = True
+    if start_muted:
+        player.volume = 0
+    cmds = Commands(model=model, player=player)
 
     with term.fullscreen(), term.cbreak(), term.hidden_cursor():
         model.render()
@@ -284,6 +289,11 @@ def run_cli():
     #   '--help'
     #   '--version'
     timestamps = run_app()
+    timestamps = run_app(
+        start_paused=arguments['--start-paused'], 
+        start_muted=arguments['--start-muted'],
+        filepath=fp
+    )
     for timestamp in timestamps:
         print(timestamp)
 
