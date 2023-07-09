@@ -28,7 +28,7 @@ Controls:
   down/up     -/+ speed x0.2
   0-9         seek to 0,10,...90%
   m           make a new timestamp
-  M           delete timestamp 
+  M           delete current timestamp 
   J/L         seek to prev/next timestamp
   q/esc       quit
 
@@ -39,12 +39,14 @@ Examples:
 Usage: 
   clark <filepath> [--trim | --split]
                    [--start-paused]
+                   [--start-muted]
   clark (-h | --version)
 
 Options:
   --trim          Extract between two timestamps
   --split         Cut at each timestamp
   --start-paused  Disable autoplay
+  --start-muted   Set volume to 0
   -h --help       Show this screen
   --version       Show version
 '''
@@ -71,7 +73,6 @@ class Model:
 
 def init_player(filepath):
     player = mpv.MPV()
-    # player.pause = True
     player.loop = True
     player.play(filepath)
     return player
@@ -186,8 +187,8 @@ def register_player_observers(*, model, player):
 def run_app():
     '''Starts TUI. Returns list of timestamps on quit.'''
     term = Terminal()
-    # player = init_player(r'C:\Users\jkwon\Desktop\other\mysong.wav')
-    player = init_player(r'C:\Users\jkwon\Desktop\other\fantastic_mr_fox.mp4')
+    # TODO: throw readable error if bad filepath
+    player = init_player(filepath)
     model = Model(render=lambda m: view_model(m, term), state={
         'position_ms': 0,
         'duration_ms': 0,
@@ -195,7 +196,6 @@ def run_app():
         'timestamps' : [],
         'timestamp_index': None,
     })
-    register_player_observers(model=model, player=player)
     if start_paused:
         player.pause = True
     if start_muted:
@@ -203,7 +203,6 @@ def run_app():
     cmds = Commands(model=model, player=player)
 
     with term.fullscreen(), term.cbreak(), term.hidden_cursor():
-        model.render()
         while True:
             input_ = term.inkey()
             if input_.code == term.KEY_ESCAPE or input_ == 'q':
@@ -278,14 +277,15 @@ def run_app():
                 player.pause = True
                 model.update(timestamp_index=i)
             model.render()
+    player.terminate()  # stop playing audio/video. TODO: close player when parent process closes, ie on error
+    print(term.clear, end='')  # remove any screen artifacts from last render
     return sorted(model.timestamps)
 
 def run_cli():
     arguments = docopt(doc, version='clark 0.1.0')
-    # print(arguments)
     # arguments = {
     #   '--start-paused': False,
-    #   '<filepath>': '/path/to/file/',
+    #   '<filepath>': 'path/to/file',
     #   '--help'
     #   '--version'
     timestamps = run_app()
