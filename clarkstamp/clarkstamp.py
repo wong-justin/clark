@@ -1,6 +1,9 @@
 from blessed import Terminal
 import mpv
 from docopt import docopt
+import subprocess
+import sys
+from pathlib import Path
 
 doc = '''
 Command-line audio/video marking.
@@ -108,6 +111,44 @@ def _nearest_item_below(list_, value):
 def print_row(term, numrow, line_contents):
     print(term.move_xy(0, numrow) + line_contents + term.clear_eol)
 
+def _iter_pairs(iterable):
+    iterable = iter(iterable)
+    prev = next(iterable)
+    for curr in iterable:
+        yield prev, curr
+        prev = curr
+
+def _format_ffmpeg_timestamp(ms):
+    # 12345 -> 12.345
+    # not sure how it compares to HH:MM:SS.mmm in terms of ffmpeg support
+    secs = ms // 1000
+    remainder_ms = ms % 1000
+    return f'{secs}.{remainder_ms:<03d}'
+
+def _filename_incrementer(fp):
+    i = 0
+    path = Path(fp)
+    while True:
+        newpath = path.parent / (path.stem + f'_{i}' + path.suffix)
+        yield str(newpath)
+        i += 1
+
+def ffmpeg_cut(*, fp_in, fp_out, start=0, end=None):
+    ffmpeg_cmd = ''
+    start_time = _format_ffmpeg_timestamp(start)
+    if end is None:
+        ffmpeg_cmd = f'ffmpeg -ss {start_time} -i {fp_in} {fp_out}'
+    else:
+        end_time = _format_ffmpeg_timestamp(end)
+        ffmpeg_cmd = f'ffmpeg -ss {start_time} -to {end_time} -i {fp_in} {fp_out}'
+
+    print(ffmpeg_cmd)
+    p = subprocess.Popen(ffmpeg_cmd, 
+                         shell=True, 
+                         stdout=subprocess.PIPE)
+    for line in p.stdout.readlines():
+        sys.stdout.buffer.write(line)
+
 # === UI / VIEW ===
 
 def view_model(model, term):
@@ -166,25 +207,123 @@ def timestamp_stats(model):
 
 # === BEHAVIOR / COMMANDS ===
 
-def register_player_observers(*, model, player):
-    '''Define callbacks given an mpv instance'''
-    # position updates about every 0.06 seconds
-    @player.property_observer('playback-time')
-    def time_observer(_name, value):
-        # None when not loaded, negative when looping to beginning
-        value = 0 if value is None or value < 0 else value
-        model.update(position_ms=int(1000*value))
+class Commands:
+    '''Groups behavior and interactions between media player and data model.
+    Commands update the player, which will update the model.
+    That order is necessary because of observer pattern in python-mpv.'''
 
-    @player.property_observer('duration')
-    def time_observer(_name, value):
-        value = 0 if value is None else value
-        model.update(duration_ms=int(1000*value))
+    def __init__(self, *, model, player):
+        self.model = model
+        self.player = player
+        self.command_for_keypress = {
+            'q': lambda: False,
+            361: lambda: False, # esc key
+            ' ': self.toggle_paused,
+            'm': self.mark_timestamp,
+            'M': self.delete_timestamp,
+            'J': self.seek_prev_timestamp,
+            'L': self.seek_next_timestamp,
+            258: lambda: self.change_speed(-0.2),  # down arrow
+            259: lambda: self.change_speed(0.2),  # up arrow
+            'j': lambda: self.seek(-15),
+            'l': lambda: self.seek(15),
+            260: lambda: self.seek(-5),  # left arrow
+            261: lambda: self.seek(5),  # right arrow
+            ',': lambda: self.seek(-0.016),  # seek backward 1 frame is broken; player rounds up i guess
+            '.': lambda: self.seek(0.016),  # seek forward 1 frame
+            '0': lambda: self.seek_percent(0),
+            '1': lambda: self.seek_percent(10),
+            '2': lambda: self.seek_percent(20),
+            '3': lambda: self.seek_percent(30),
+            '4': lambda: self.seek_percent(40),
+            '5': lambda: self.seek_percent(50),
+            '6': lambda: self.seek_percent(60),
+            '7': lambda: self.seek_percent(70),
+            '8': lambda: self.seek_percent(80),
+            '9': lambda: self.seek_percent(90),
+            ')': self.seek_end,  # Shift-0
+        }
 
-    @player.property_observer('pause')
-    def time_observer(_name, value):
-        model.update(is_paused=value)
+        # register callbacks
+        @player.property_observer('playback-time')
+        def time_observer(_name, value):
+            # None when not loaded, negative when looping to beginning
+            # position updates about every 0.06 seconds
+            value = 0 if value is None or value < 0 else value
+            model.update(position_ms=int(1000*value))
 
-def run_app():
+        @player.property_observer('duration')
+        def time_observer(_name, value):
+            value = 0 if value is None else value
+            model.update(duration_ms=int(1000*value))
+
+        @player.property_observer('pause')
+        def time_observer(_name, value):
+            model.update(is_paused=value)
+
+    def toggle_paused(self):
+        self.player.pause = not self.player.pause
+
+    def seek(self, seconds_forward):
+        self.player.playback_time += seconds_forward
+
+    def seek_percent(self, percent):
+        # probably only safe for ints 0-99
+        # note: to implement 100, it's hard to seek to final millisecond.
+        #  try going to final second instead.
+        self.player.percent_pos = percent
+
+    def change_speed(self, factor):
+        self.player.speed += factor
+
+    def mark_timestamp(self):
+        timestamps = [*self.model.timestamps, self.model.position_ms]
+        self.model.update(timestamps=timestamps, timestamp_index=len(timestamps)-1)
+
+    def delete_timestamp(self):
+        # TODO: fix unintuitive current timestamp model
+        # deletes current timestamp index, which may be far away or wrong
+        # intended to be used after navigating with J/L
+        if self.model.timestamp_index is None:
+            return
+        i = self.model.timestamp_index
+        updated_timestamps = [
+            *self.model.timestamps[:i],
+            *self.model.timestamps[i+1:]
+        ]
+        updated_index = max(i-1, 0) if len(updated_timestamps) > 0 else None
+        self.model.update(timestamps=updated_timestamps, timestamp_index=updated_index)
+
+    def seek_prev_timestamp(self):
+        # pauses too
+        prev_timestamp_ms = _nearest_item_below(
+            sorted(self.model.timestamps), 
+            self.model.position_ms - 1)
+        if prev_timestamp_ms is None:
+            return
+        self.player.playback_time = prev_timestamp_ms / 1000
+        i = sorted(self.model.timestamps).index(prev_timestamp_ms)
+        self.player.pause = True
+        self.model.update(timestamp_index=i)
+
+    def seek_next_timestamp(self):
+        # pauses too
+        next_timestamp_ms = _nearest_item_above(
+            sorted(self.model.timestamps), 
+            self.model.position_ms + 1)
+        if next_timestamp_ms is None:
+            return
+        self.player.playback_time = next_timestamp_ms / 1000
+        i = sorted(self.model.timestamps).index(next_timestamp_ms)
+        self.player.pause = True
+        self.model.update(timestamp_index=i)
+
+    def seek_end(self):
+        # player.playback_time = (model.duration_ms - 1) / 1000
+        self.player.playback_time = self.model.duration_ms // 1000
+
+
+def run_app(start_paused, start_muted, filepath):
     '''Starts TUI. Returns list of timestamps on quit.'''
     term = Terminal()
     # TODO: throw readable error if bad filepath
@@ -204,79 +343,15 @@ def run_app():
 
     with term.fullscreen(), term.cbreak(), term.hidden_cursor():
         while True:
-            input_ = term.inkey()
-            if input_.code == term.KEY_ESCAPE or input_ == 'q':
-                break
-            # toggle play/pause
-            elif input_ == ' ':
-                player.pause = not player.pause
-            # change playback speed
-            elif input_.code == term.KEY_DOWN:
-                player.speed -= 0.2
-            elif input_.code == term.KEY_UP:
-                player.speed += 0.2
-            # seek +/- increments
-            elif input_ == 'l':
-                player.playback_time += 15
-            elif input_ == 'j':
-                player.playback_time -= 15
-            elif input_.code == term.KEY_RIGHT:
-                player.playback_time += 5
-            elif input_.code == term.KEY_LEFT:
-                player.playback_time -= 5
-            elif input_ == '.':
-                player.playback_time += 0.001
-            elif input_ == ',':
-                player.playback_time -= 0.001
-
-            # seek 0-90%
-            elif '0' <= input_ <= '9':
-                player.percent_pos = int(input_) * 10
-            # note: hard to seek to final millisecond, so go to final second instead
-            elif input_ == ')':  # <S-0>
-                # player.playback_time = (model.duration_ms - 1) / 1000
-                player.playback_time = model.duration_ms // 1000
-            # make a timestamp at current position
-            elif input_ == 'm':
-                timestamps = [*model.timestamps, model.position_ms]
-                model.update(timestamps=timestamps, timestamp_index=len(timestamps)-1)
-            # delete selected timestamp
-            elif input_ == 'M':
-                if model.timestamp_index is None:
-                    continue
-                i = model.timestamp_index
-                updated_timestamps = [
-                    *model.timestamps[:i],
-                    *model.timestamps[i+1:]
-                ]
-                updated_index = max(i-1, 0) if len(updated_timestamps) > 0 else None
-                model.update(timestamps=updated_timestamps, timestamp_index=updated_index)
-
-            # seek to prev timestamp and pause
-            elif input_ == 'J':
-                prev_timestamp_ms = _nearest_item_below(
-                    sorted(model.timestamps), 
-                    model.position_ms - 1)
-                if prev_timestamp_ms is None:
-                    continue
-                player.playback_time = prev_timestamp_ms / 1000
-                i = sorted(model.timestamps).index(prev_timestamp_ms)
-                player.pause = True
-                model.update(timestamp_index=i)
-
-            # seek to next timestamp and pause
-            elif input_ == 'L':
-                next_timestamp_ms = _nearest_item_above(
-                    sorted(model.timestamps), 
-                    model.position_ms + 1)
-                if next_timestamp_ms is None:
-                    continue
-                player.playback_time = next_timestamp_ms / 1000
-                i = sorted(model.timestamps).index(next_timestamp_ms)
-
-                player.pause = True
-                model.update(timestamp_index=i)
             model.render()
+            input_ = term.inkey()
+            # special int/constant or plain char
+            key_input = input_.code or input_
+            if key_input in cmds.command_for_keypress:
+                result = cmds.command_for_keypress[key_input]()
+                if result is False:
+                    break
+
     player.terminate()  # stop playing audio/video. TODO: close player when parent process closes, ie on error
     print(term.clear, end='')  # remove any screen artifacts from last render
     return sorted(model.timestamps)
@@ -288,7 +363,11 @@ def run_cli():
     #   '<filepath>': 'path/to/file',
     #   '--help'
     #   '--version'
-    timestamps = run_app()
+    fp = arguments['<filepath>']
+    if not Path(fp).is_file():
+        print(f'Error: \'{fp}\' is not a valid filepath.', file=sys.stderr)
+        return
+
     timestamps = run_app(
         start_paused=arguments['--start-paused'], 
         start_muted=arguments['--start-muted'],
@@ -296,6 +375,20 @@ def run_cli():
     )
     for timestamp in timestamps:
         print(timestamp)
+
+    fp_out = _filename_incrementer(fp)
+    if arguments['--split'] is True and len(timestamps) > 0:
+        ffmpeg_cut(fp_in=fp, fp_out=next(fp_out), end=timestamps[0])
+        for start, end in _iter_pairs(timestamps):
+            ffmpeg_cut(fp_in=fp, fp_out=next(fp_out), start=start, end=end)
+        ffmpeg_cut(fp_in=fp, fp_out=next(fp_out), start=timestamps[-1])
+
+    elif arguments['--trim'] is True:
+        if len(timestamps) != 2:
+            print(f'Error: expected exactly 2 timestamps to trim between; received {len(timestamps)}.', file=sys.stderr)
+            return
+
+        ffmpeg_cut(fp_in=fp, fp_out=next(fp_out), start=timestamps[0], end=timestamps[1])
 
 if __name__ == '__main__':
     run_cli()
