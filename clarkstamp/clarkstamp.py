@@ -34,18 +34,16 @@ Controls:
 
 Examples:
   clark file.mp4 --trim --start-paused
-  clark file.mp3 --split --import 1200,9500
+  clark file.mp3 --split
   
 Usage: 
   clark <filepath> [--trim | --split]
-                   [--import <timestamps>]
                    [--start-paused]
   clark (-h | --version)
 
 Options:
   --trim          Extract between two timestamps
   --split         Cut at each timestamp
-  --import        Load comma-separated timestamps
   --start-paused  Disable autoplay
   -h --help       Show this screen
   --version       Show version
