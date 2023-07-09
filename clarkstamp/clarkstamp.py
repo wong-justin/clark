@@ -357,7 +357,7 @@ def run_app(start_paused, start_muted, filepath):
     return sorted(model.timestamps)
 
 def run_cli():
-    arguments = docopt(doc, version='clark 0.1.0')
+    arguments = docopt(doc, version='clark 0.2.0')
     # arguments = {
     #   '--start-paused': False,
     #   '<filepath>': 'path/to/file',
