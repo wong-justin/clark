@@ -2,7 +2,7 @@
 
 (command-line audio/video marking)
 
-[Demo/Features]
+[Demo](./demo.mp4)
 
 A TUI for interactive media playback and timestamping, using MPV.
 
@@ -38,8 +38,12 @@ clark song.wav | awk '{system("date -u -d @" $0/1000 " +%T.%3N")}'
 
 ## Installation
 
+One way, something like: `git clone`, `pip install`, then `alias clark='python /path/to/clark.py'`
+
+Or:
+
 ```
-pip install -e git+https://github.com/wong-justin/clark.git#egg=clark-py
+pip install -e git+https://github.com/wong-justin/clark-mpv.git#egg=clark-mpv
 ```
 
 Requirements: [`mpv`](https://mpv.io/), `python~3.7`, and optionally `ffmpeg` for `--trim` and `--split`.
@@ -66,17 +70,19 @@ The most common errors are related to `mpv` installation, so check the [`instruc
 
 ### Controls
 
+```
 | Keypress      | Description                            |
 |---------------|----------------------------------------|
-| `space`       | play/pause                             |
-| `j/l `        | -/+ 15 secs                            |
-| `left/right ` | -/+ 5 secs                             |
-| `down/up `    | -/+ speed x0.2                         |
-| `0-9 `        | seek to 0,10,...90%                    |
-| `m `          | mark timestamp at curr position        |
-| `M `          | delete timestamp                       |
-| `J/L `        | seek to prev/next timestamp and pause  |
-| `q/esc `      | quit and print timestamps in millis    |
+|  space        | play/pause                             |
+|  j/l          | -/+ 15 secs                            |
+|  left/right   | -/+ 5 secs                             |
+|  down/up      | -/+ speed x0.2                         |
+|  0-9          | seek to 0,10,...90%                    |
+|  m            | mark timestamp at curr position        |
+|  M            | delete timestamp                       |
+|  J/L          | seek to prev/next timestamp and pause  |
+|  q/esc        | quit and print timestamps in millis    |
+```
 
 
 ### The TUI, a breakdown
@@ -102,8 +108,8 @@ Note: timestamps clustered together will appear under one marker. In this case, 
 ```
 Usage: 
   clark <filepath> [--trim | --split]
-                   [--import <timestamps>]
                    [--start-paused]
+                   [--start-muted]
   clark (-h | --version)
 
 Options:
@@ -114,15 +120,15 @@ Options:
   Both cannot be executed at the same time.
   Input files remain unmodified.
 
-  --trim          Extract between two timestamps.
-                  file.mp3 -> file_trimmed.mp3
-  --split         Cut at each timestamp.
+  --trim          Extract between two timestamps
+                  file.mp3 -> file_0.mp3
+
+  --split         Cut at each timestamp
                   file.mp4 -> file_0.mp4, file_1.mp4, ...
 
-  --import        Load comma-separated timestamps.
-                  --import 19817,32580
+  --start-paused  Disable autoplay
 
-  --start-paused  Disable autoplay.
+  --start-muted   Set volume to 0
 
   -h --help       Show this screen
   --version       Show version
