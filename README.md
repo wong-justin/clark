@@ -4,30 +4,42 @@
 
 [Demo](https://github.com/wong-justin/clark/assets/28441593/3515c933-185c-43fc-b1c0-040d31f8d366)
 
-A TUI for interactive media playback and timestamping, using MPV.
+A TUI for media playback and timestamping, using [mpv](https://mpv.io/).
 
-Perfect when you want to stay in the command line and create timestamps while scripting.
+Designed for when you want to stay in the command line and create timestamps.
+
+## Installation
+
+```
+pip install https://github.com/wong-justin/clark/archive/main.zip
+```
+
+or a bit slower, cloning the whole repo:
+
+```
+pip install git+https://github.com/wong-justin/clark.git
+```
+
+Then check that it works, especially concerning `mpv`:
+
+```
+clark --version
+clark path/to/sample/audio
+```
+
+Requirements: `mpv`, `python~3.7`, and optionally `ffmpeg` for `--trim` and `--split`.
+
+Read more about the installation process and other quirks in the <a href="https://wonger.dev/posts/clark">blog post</a>.
 
 ## Examples
 
-- Trim away content from the ends of a video:
+My most common use cases:
 
-```
-clark video.mp4 --trim
-```
+- I have a recording of multiple songs, and I want to crop them out as individual files with millisecond precision (why do people start clapping so early??): `clark concert.mp3 --split`
 
-- Choose where to split a concert recording into songs, and don't autoplay:
+- I have a screen recording, and the beginning and end have cruft that needs trimming: `clark recording.mp4 --trim`
 
-```
-clark concert.mp3 --split --start-paused
-```
-
-- Timestamp using only audio from a video to avoid the extra window:
-
-```
-ffmpeg -i video.mkv -map 0:a -acodec copy /tmp/audio.mp4
-clark /tmp/audio.mp4
-```
+- If I'm trimming a video and don't want to be bothered by audio, I'll `--start-muted`. If it's a long file, I'll mash `l` to seek forward, or jump to positions like 50% with `5`. When it's close to the point I want to mark, I'll tap `<Down-Arrow>` a bit to slow down in increments of 0.2x. I'll mark a timestamp with `m`, seek back to it with `J`, and replay it again to make sure it sounds exactly right. If it's not good, I'll delete the timestamp with `M` and retry. And then `q` to finish.
 
 - Convert timestamps to `HH:MM:SS:mmm`:
 
@@ -35,40 +47,11 @@ clark /tmp/audio.mp4
 clark song.wav | awk '{system("date -u -d @" $0/1000 " +%T.%3N")}' 
 ```
 
-
-## Installation
-
-One way, something like: `git clone`, `pip install`, then `alias clark='python /path/to/clark.py'`
-
-Or:
-
-```
-pip install -e git+https://github.com/wong-justin/clark-mpv.git#egg=clark-mpv
-```
-
-Requirements: [`mpv`](https://mpv.io/), `python~3.7`, and optionally `ffmpeg` for `--trim` and `--split`.
-
-### Windows
-
-#### Quick and dirty:
-
-- `pip install clark-py`
-- Extract `mpv-2.dll` from the [libmpv package](https://sourceforge.net/projects/mpv-player-windows/files/libmpv/) and place next to `clark`, wherever it is (eg: `%APPDATA%/Local/Programs/Python/Python3x/Lib/site-packages/clark-py/`), or anywhere else on `$PATH`.
-
-#### Or more responsibly:
-
-- Activate a virtual environment (eg. `python -m venv clark-env`) before `pip install clark-py`
-- Extract `mpv-2.dll` from the [libmpv package](https://sourceforge.net/projects/mpv-player-windows/files/libmpv/) into `clark-env/Scripts/`
-- Create a global alias that references `clark` in the venv, eg `clark.bat` = `call C:/path/to/clark-env/Scripts/activate && clark %*`
-
-### Troubleshooting
-
-The most common errors are related to `mpv` installation, so check the [`instructions`](https://github.com/jaseg/python-mpv#requirements) for `python-mpv`. See also [the context](https://github.com/jaseg/python-mpv/issues/60#issuecomment-352719773) for the extra Windows `.dll`.
-
-
 ## Usage
 
 ### Controls
+
+Kinda like youtube keyboard shortcuts:
 
 ```
 | Keypress      | Description                            |
@@ -139,22 +122,22 @@ Options:
 
 ```
 clark --help
-
-man clark
 ```
 
 ## Roadmap
 
 From high to low priority:
 
-- Timestamp import option. 
+- Fix current timestamp not matching current seek position
 
-`clark --import 1000,2000,3000`. Example use case: adjusting automated timestamps that are always a little inaccurate, even >1 second behind.
+- New TUI widget for speed, eg `x1.0`
+
+- Document any quirky behavior
+
+- Timestamp import option. `clark --import 1000,2000,3000`. Example use case: adjusting automated timestamps that are always a little inaccurate, even >1 second behind.
 
 - New controls: `,/.` to seek -/+ 1 frame for video or 1 ms for audio
 
-- New TUI widget if necessary: speed, eg `x1.0`
+- If truly motivated: keep everything in the command-line and remove the gui video window, and the mpv dependency overall, by converting video to ANSI-color unicode blocks. Likely involves porting to high-performance language (rust + batimg?). Seems worthy of a separate project, even if it keeps the same features and interface.
 
-- If truly motivated: keep everything in the command-line by converting video to ANSI-color unicode blocks. Likely involves porting to high-performance language (rust + batimg?) and discarding MPV. Seems worthy of a separate project, even if it keeps the same features and interface.
-
-
+- make a man page, just for fun
