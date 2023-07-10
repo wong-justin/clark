@@ -1,13 +1,13 @@
 import setuptools
 
 setuptools.setup(
-    name='clarkstamp',
-    version='0.1.0',
+    name='clark-mpv',
+    version='0.2.0',
     author='Justin Wong',
-    author_email='jkwongfl@yahoo.com',
-    description='A TUI for interactive media playback and timestamping, using MPV.',
+    author_email='justin@wonger.dev',
+    description='A TUI for media playback and timestamping, using MPV.',
     packages=setuptools.find_packages(),
     install_requires=['blessed', 'docopt', 'python-mpv'],
-    entry_points={'console_scripts': ['clark=clarkstamp.clarkstamp:run_cli']},
+    entry_points={'console_scripts': ['clark=clark-mpv.main:run_cli']},
     python_requires='>=3.7',
 )

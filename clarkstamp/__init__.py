@@ -1,4 +1,4 @@
-from . import clarkstamp
+from . import main
 
 if __name__ == '__main__':
-    clarkstamp.run_cli()
+    main.run_cli()
