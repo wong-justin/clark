@@ -2,7 +2,7 @@
 
 (command-line audio/video marking)
 
-[Demo](./demo.mp4)
+[Demo](https://github.com/wong-justin/clark/assets/28441593/3515c933-185c-43fc-b1c0-040d31f8d366)
 
 A TUI for interactive media playback and timestamping, using MPV.
 
