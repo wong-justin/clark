@@ -1,3 +1,6 @@
+> [!NOTE]
+> clark is being replaced by [vic](https://github.com/wong-justin/vic).
+
 # clark 
 
 (command-line audio/video marking)
